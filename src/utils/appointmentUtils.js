@@ -277,3 +277,102 @@ export const getCustomerAppointments = async (customerId) => {
     return [];
   }
 };
+
+/**
+ * Approves a pending appointment
+ * @param {string} businessId - ID of the business approving the appointment
+ * @param {string} appointmentId - ID of the appointment to approve
+ * @returns {Promise<{success: boolean, error?: string, notification?: Object}>}
+ */
+export const approveAppointment = async (businessId, appointmentId) => {
+  try {
+    const appointmentRef = firestore().collection('appointments').doc(appointmentId);
+    const appointmentDoc = await appointmentRef.get();
+
+    if (!appointmentDoc.exists) {
+      return { success: false, error: 'Appointment not found' };
+    }
+
+    const appointment = appointmentDoc.data();
+
+    if (appointment.businessId !== businessId) {
+      return { success: false, error: 'Unauthorized access' };
+    }
+
+    if (appointment.status !== 'pending') {
+      return { success: false, error: 'Appointment is not in pending status' };
+    }
+
+    await appointmentRef.update({
+      status: 'confirmed',
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      notification: {
+        type: 'APPOINTMENT_APPROVED',
+        customerId: appointment.customerId,
+        appointmentId,
+        serviceName: appointment.serviceName,
+        startTime: appointment.startTime,
+      },
+    };
+  } catch (error) {
+    console.error('Error approving appointment:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Rejects a pending appointment with a reason
+ * @param {string} businessId - ID of the business rejecting the appointment
+ * @param {string} appointmentId - ID of the appointment to reject
+ * @param {string} reason - Reason for rejection
+ * @returns {Promise<{success: boolean, error?: string, notification?: Object}>}
+ */
+export const rejectAppointment = async (businessId, appointmentId, reason) => {
+  try {
+    if (!reason || reason.trim() === '') {
+      return { success: false, error: 'Rejection reason is required' };
+    }
+
+    const appointmentRef = firestore().collection('appointments').doc(appointmentId);
+    const appointmentDoc = await appointmentRef.get();
+
+    if (!appointmentDoc.exists) {
+      return { success: false, error: 'Appointment not found' };
+    }
+
+    const appointment = appointmentDoc.data();
+
+    if (appointment.businessId !== businessId) {
+      return { success: false, error: 'Unauthorized access' };
+    }
+
+    if (appointment.status !== 'pending') {
+      return { success: false, error: 'Appointment is not in pending status' };
+    }
+
+    await appointmentRef.update({
+      status: 'rejected',
+      rejectionReason: reason,
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      notification: {
+        type: 'APPOINTMENT_REJECTED',
+        customerId: appointment.customerId,
+        appointmentId,
+        serviceName: appointment.serviceName,
+        startTime: appointment.startTime,
+        reason,
+      },
+    };
+  } catch (error) {
+    console.error('Error rejecting appointment:', error);
+    return { success: false, error: error.message };
+  }
+};
